@@ -448,7 +448,7 @@ function renderTodayBanner(todayRecs) {
   if (!todayRecs.length) { el.innerHTML=''; return; }
   const byW = {};
   todayRecs.forEach(r => { if(!byW[r.worker]) byW[r.worker]=[]; byW[r.worker].push(r); });
-  el.innerHTML = `<div class="today-banner">
+  el.innerHTML = `<div class="today-banner" id="todayBannerInner" style="transition:opacity 1.5s ease">
     <div class="today-header">✓ REGISTROS DE HOY — ${fmtDate(t)}</div>
     ${Object.entries(byW).map(([w,rs])=>`
       <div class="today-row">
@@ -456,6 +456,11 @@ function renderTodayBanner(todayRecs) {
         <div class="today-earned">${money(rs.length*RATE)}</div>
       </div>`).join('')}
   </div>`;
+  // Fade out after 10 seconds
+  setTimeout(() => {
+    const b = document.getElementById('todayBannerInner');
+    if (b) { b.style.opacity = '0'; setTimeout(() => { el.innerHTML = ''; }, 1500); }
+  }, 10000);
 }
 
 async function pickWorker(name) {
