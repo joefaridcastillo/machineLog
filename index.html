@@ -419,44 +419,39 @@ function showLoading(id) { document.getElementById(id).innerHTML = '<div style="
 
 // ── CHECK-IN VIEW ──
 async function renderWorkerPills() {
-  const t = today();
   try {
     const todayRecs = await getRecordsToday();
     document.getElementById('workerPills').innerHTML = WORKERS.map(w => {
       const recs = todayRecs.filter(r => r.worker===w.name);
       const m = MACHINES.find(x=>x.id===w.machine);
       const sub = recs.length
-        ? `✓ Registrado hoy · ${money(recs.length*RATE)} ganados`
+        ? `✓ Registrado hoy`
         : `${w.machine} · ${m.name}`;
       return `<div class="worker-pill" onclick="pickWorker('${w.name}')">
         <div><div class="worker-pill-name">${w.name}</div><div class="worker-pill-sub">${sub}</div></div>
         <div class="worker-pill-arrow">${recs.length ? '✓' : '›'}</div>
       </div>`;
     }).join('');
-    renderTodayBanner(todayRecs);
   } catch(e) {
     document.getElementById('workerPills').innerHTML = `<div style="color:#c00;font-family:var(--mono);font-size:11px;padding:10px;background:#fff0f0;border-radius:6px;border:1px solid #fcc">
-      ⚠ Error: ${e.message}<br><br>
-      <small>Verifica que corriste el SQL en Supabase.<br>Ve a supabase.com → tu proyecto → SQL Editor y corre el script de creación de tablas.</small>
-    </div>`;
+      ⚠ Error: ${e.message}</div>`;
   }
 }
 
-function renderTodayBanner(todayRecs) {
+function renderTodayBanner(todayRecs, workerName) {
   const t = today();
   const el = document.getElementById('todayBanner');
-  if (!todayRecs.length) { el.innerHTML=''; return; }
-  const byW = {};
-  todayRecs.forEach(r => { if(!byW[r.worker]) byW[r.worker]=[]; byW[r.worker].push(r); });
+  // Only show banner for the specific worker who just checked in
+  if (!workerName || !todayRecs.length) { el.innerHTML=''; return; }
+  const myRecs = todayRecs.filter(r => r.worker === workerName);
+  if (!myRecs.length) { el.innerHTML=''; return; }
   el.innerHTML = `<div class="today-banner" id="todayBannerInner" style="transition:opacity 1.5s ease">
-    <div class="today-header">✓ REGISTROS DE HOY — ${fmtDate(t)}</div>
-    ${Object.entries(byW).map(([w,rs])=>`
-      <div class="today-row">
-        <div><div class="today-worker">${w}</div><div class="today-machine">${rs.map(r=>r.machine).join(', ')}</div></div>
-        <div class="today-earned">${money(rs.length*RATE)}</div>
-      </div>`).join('')}
+    <div class="today-header">✓ CHECK-IN REGISTRADO — ${fmtDate(t)}</div>
+    <div class="today-row">
+      <div><div class="today-worker">${workerName}</div><div class="today-machine">${myRecs.map(r=>r.machine).join(', ')}</div></div>
+      <div class="today-earned">${money(myRecs.length*RATE)}</div>
+    </div>
   </div>`;
-  // Fade out after 10 seconds
   setTimeout(() => {
     const b = document.getElementById('todayBannerInner');
     if (b) { b.style.opacity = '0'; setTimeout(() => { el.innerHTML = ''; }, 1500); }
@@ -514,8 +509,11 @@ async function doCheckin() {
     clearSig();
     document.getElementById('checkinForm').style.display='none';
     document.getElementById('machineSection').style.display='none';
+    const justCheckedIn = selWorker;
     selMachine=null; selWorker=null;
     await renderWorkerPills();
+    const todayRecs = await getRecordsToday();
+    renderTodayBanner(todayRecs, justCheckedIn);
     showToast(`✓ Check-in registrado — ${money(RATE)} ganados hoy`);
   } catch(e) {
     showToast('Error al guardar, intenta de nuevo', true);
@@ -763,7 +761,7 @@ function showView(n){
   document.getElementById('tab-'+n).classList.add('active');
   if(n==='dashboard') renderDashboard();
   if(n==='earnings') renderEarningsPills();
-  if(n==='worker') renderWorkerPills();
+  if(n==='worker') { document.getElementById('todayBanner').innerHTML=''; renderWorkerPills(); }
 }
 
 function showToast(msg,err=false){const t=document.getElementById('toast');t.textContent=msg;t.className='toast'+(err?' error':'')+' show';setTimeout(()=>t.classList.remove('show'),2800);}
