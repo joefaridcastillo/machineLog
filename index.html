@@ -215,6 +215,12 @@ input:focus, select:focus { border-color: var(--orange); }
 .est-val.red { color:var(--red); }
 .est-val.big { font-size:28px; color:var(--orange); }
 
+.missed-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:10px; padding:16px; margin-bottom:16px; }
+.worker-select-row { display:flex; flex-direction:column; gap:8px; }
+.worker-sel-btn { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px 16px; font-family:var(--display); font-size:16px; letter-spacing:1px; text-align:left; cursor:pointer; transition:all .15s; }
+.worker-sel-btn:active { background:#f5f5f5; }
+.worker-sel-btn.active { background:var(--orange); color:#fff; border-color:var(--orange); }
+
 .month-tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px; } color:var(--muted); font-family:var(--mono); font-size:10px; padding:5px 10px; border-radius:3px; cursor:pointer; white-space:nowrap; flex-shrink:0; }
 .month-tab.active { background:var(--orange); border-color:var(--orange); color:#000; font-weight:600; }
 
@@ -305,29 +311,6 @@ input:focus, select:focus { border-color: var(--orange); }
     <div class="machines-grid" id="machineGrid"></div>
     <div class="checkin-form" id="checkinForm" style="display:none">
       <div class="form-title" id="checkinTitle">CONFIRMAR CHECK-IN</div>
-
-      <!-- CALENDAR: select days used -->
-      <div class="field">
-        <label>DÍAS QUE USASTE LA MÁQUINA</label>
-        <div class="cal-hint">Toca los días — puedes seleccionar varios</div>
-        <div class="calendar-wrap" id="calendarWrap"></div>
-        <div class="cal-selected" id="calSelected">Ningún día seleccionado</div>
-      </div>
-
-      <!-- RENT DAYS & EARNINGS ESTIMATE -->
-      <div class="field">
-        <label>¿CUÁNTOS DÍAS TE SOLICITARON RENTA ESTE MES?</label>
-        <div class="cal-hint">Selecciona los días que te cobraron renta</div>
-        <div class="calendar-wrap" id="rentCalendarWrap"></div>
-        <div class="earnings-estimate" id="earningsEstimate" style="display:none">
-          <div class="est-row"><div class="est-label">DÍAS TRABAJADOS</div><div class="est-val" id="estDays">0</div></div>
-          <div class="est-row"><div class="est-label">DÍAS RENTA</div><div class="est-val" id="estRentDays">0</div></div>
-          <div class="est-row"><div class="est-label">GANANCIA ESTIMADA MES</div><div class="est-val green" id="estEarnings">$0</div></div>
-          <div class="est-row"><div class="est-label">RENTA A PAGAR</div><div class="est-val red" id="estRent">$0</div></div>
-          <div class="est-row big"><div class="est-label">NETO ESTIMADO</div><div class="est-val big" id="estNet">$0</div></div>
-        </div>
-      </div>
-
       <div class="field">
         <label>JOB / PROYECTO</label>
         <input type="text" id="jobInput" placeholder="Ej: Chick-fil-A 26-410…">
@@ -340,7 +323,7 @@ input:focus, select:focus { border-color: var(--orange); }
         </div>
         <button class="sig-clear" onclick="clearSig()">✕ Borrar firma</button>
       </div>
-      <button class="btn-primary" onclick="doCheckin()">✓ REGISTRAR DÍAS</button>
+      <button class="btn-primary" onclick="doCheckin()">✓ REGISTRAR DÍA</button>
       <button class="btn-ghost" onclick="cancelCheckin()">Cancelar</button>
     </div>
   </div>
@@ -363,6 +346,34 @@ input:focus, select:focus { border-color: var(--orange); }
 <div class="view" id="view-dashboard">
   <div class="slabel">REPORTES PENDIENTES DE PAGO</div>
   <div id="pendingReports"></div>
+
+  <!-- MISSED CHECKIN PANEL -->
+  <div class="slabel">REGISTRAR DÍA OLVIDADO</div>
+  <div class="missed-panel">
+    <div class="field">
+      <label>TRABAJADOR</label>
+      <div class="worker-select-row" id="missedWorkerSelect">
+        <button class="worker-sel-btn" onclick="selectMissedWorker('Adrián Marín')">Adrián Marín</button>
+        <button class="worker-sel-btn" onclick="selectMissedWorker('Moises Sosa')">Moises Sosa</button>
+        <button class="worker-sel-btn" onclick="selectMissedWorker('Jorge Coveña')">Jorge Coveña</button>
+      </div>
+    </div>
+    <div id="missedCalSection" style="display:none">
+      <div class="field">
+        <label>SELECCIONA LOS DÍAS OLVIDADOS</label>
+        <div class="cal-hint">Días en verde ya tienen registro. Toca para seleccionar días faltantes.</div>
+        <div class="calendar-wrap" id="missedCalWrap"></div>
+        <div class="cal-selected" id="missedCalSelected">Ningún día seleccionado</div>
+      </div>
+      <div class="field">
+        <label>JOB / PROYECTO</label>
+        <input type="text" id="missedJobInput" placeholder="Ej: Chick-fil-A 26-410…">
+      </div>
+      <button class="btn-primary" onclick="saveMissedCheckins()">✓ REGISTRAR DÍAS OLVIDADOS</button>
+      <button class="btn-ghost" onclick="cancelMissed()">Cancelar</button>
+    </div>
+  </div>
+
   <div class="slabel">MES — <span id="dashMonthLabel"></span></div>
   <div class="month-tabs" id="monthTabs"></div>
   <div class="stats-grid">
@@ -527,184 +538,158 @@ async function pickWorker(name) {
   document.getElementById('checkinTitle').textContent = `CHECK-IN — ${w.machine}`;
   document.getElementById('machineSection').scrollIntoView({behavior:'smooth'});
   setTimeout(()=>{ if(window._resizeSig) window._resizeSig(); }, 50);
-  await initCalendar();
 }
 
 function cancelCheckin() {
   document.getElementById('checkinForm').style.display = 'none';
   document.getElementById('machineSection').style.display = 'none';
-  selMachine = null; selWorker = null; selectedDays = []; selectedRentDays = [];
+  selMachine = null; selWorker = null;
 }
 
 async function doCheckin() {
   const job = document.getElementById('jobInput').value.trim();
   if (!job) { showToast('Ingresa el Job/Proyecto',true); return; }
   if (!hasSig) { showToast('Se requiere tu firma',true); return; }
-  if (selectedDays.length === 0) { showToast('Selecciona al menos un día',true); return; }
-
   const btn = document.querySelector('#checkinForm .btn-primary');
   btn.disabled = true; btn.textContent = 'Guardando...';
-
   try {
-    const sigData = getSigDataURL();
-    // Insert one record per selected day
-    for (let i = 0; i < selectedDays.length; i++) {
-      const d = selectedDays[i];
-      await insertRecord({
-        id: Date.now() + i,
-        worker: selWorker,
-        machine: selMachine,
-        job,
-        date: d,
-        earned: RATE,
-        sig: sigData,
-        ts: new Date().toISOString()
-      });
-    }
-    const daysCount = selectedDays.length;
-    const totalEarned = daysCount * RATE;
+    await insertRecord({ id:Date.now(), worker:selWorker, machine:selMachine, job, date:today(), earned:RATE, sig:getSigDataURL(), ts:new Date().toISOString() });
     document.getElementById('jobInput').value='';
     clearSig();
     document.getElementById('checkinForm').style.display='none';
     document.getElementById('machineSection').style.display='none';
     const justCheckedIn = selWorker;
-    selMachine=null; selWorker=null; selectedDays=[]; selectedRentDays=[];
+    selMachine=null; selWorker=null;
     await renderWorkerPills();
     const todayRecs = await getRecordsToday();
     renderTodayBanner(todayRecs, justCheckedIn);
-    showToast(`✓ ${daysCount} día(s) registrado(s) — ${money(totalEarned)} ganados`);
+    showToast(`✓ Check-in registrado — ${money(RATE)} ganados hoy`);
   } catch(e) {
     showToast('Error al guardar, intenta de nuevo', true);
   } finally {
-    btn.disabled = false; btn.textContent = '✓ REGISTRAR DÍAS';
+    btn.disabled = false; btn.textContent = '✓ REGISTRAR DÍA';
   }
 }
 
-// ── CALENDAR STATE ──
-let selectedDays = [];   // days worker used machine
-let selectedRentDays = []; // days rent was charged
-let calViewDate = new Date();
-let rentCalViewDate = new Date();
-let loggedDaysThisMonth = [];
+// ── MISSED CHECKIN (OWNER ONLY) ──
+let missedWorker = null;
+let missedSelectedDays = [];
+let missedCalView = new Date();
+let missedLoggedDays = [];
 
-function buildCalendar(wrapperId, viewDate, selectedArr, isRent, loggedDays=[]) {
-  const wrap = document.getElementById(wrapperId);
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const monthName = viewDate.toLocaleDateString('es-US',{month:'long',year:'numeric'});
+function selectMissedWorker(name) {
+  missedWorker = name;
+  missedSelectedDays = [];
+  document.querySelectorAll('.worker-sel-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('missedCalSection').style.display = 'block';
+  loadMissedCalendar();
+}
+
+async function loadMissedCalendar() {
+  missedCalView = new Date();
+  try {
+    const w = WORKERS.find(x=>x.name===missedWorker);
+    const existing = await sbFetch(`records?worker=eq.${encodeURIComponent(missedWorker)}&machine=eq.${w.machine}`);
+    missedLoggedDays = existing.map(r=>r.date);
+  } catch(e) { missedLoggedDays = []; }
+  renderMissedCal();
+}
+
+function renderMissedCal() {
+  const wrap = document.getElementById('missedCalWrap');
+  const year = missedCalView.getFullYear();
+  const month = missedCalView.getMonth();
+  const monthName = missedCalView.toLocaleDateString('es-US',{month:'long',year:'numeric'});
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const todayStr = today();
-  const minDate = new Date(); minDate.setDate(minDate.getDate()-30);
+  const minDate = new Date(); minDate.setDate(minDate.getDate()-60);
   const minStr = minDate.toISOString().split('T')[0];
-
   const dows = ['D','L','M','X','J','V','S'];
 
   let html = `<div class="cal-header">
-    <button class="cal-nav" onclick="${isRent?'rentCalPrev':'calPrev'}()">‹</button>
+    <button class="cal-nav" onclick="missedCalPrev()">‹</button>
     <div class="cal-month">${monthName.toUpperCase()}</div>
-    <button class="cal-nav" onclick="${isRent?'rentCalNext':'calNext'}()">›</button>
+    <button class="cal-nav" onclick="missedCalNext()">›</button>
   </div>
   <div class="cal-grid">
     ${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
     ${Array(firstDay).fill('<div class="cal-day empty"></div>').join('')}`;
 
   for (let d=1; d<=daysInMonth; d++) {
-    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isFuture = dateStr > todayStr;
-    const isTooOld = dateStr < minStr;
-    const isLogged = !isRent && loggedDays.includes(dateStr);
-    const isSelected = isRent ? selectedRentDays.includes(dateStr) : selectedDays.includes(dateStr);
-    const isToday = dateStr === todayStr;
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isFuture = ds > todayStr;
+    const isTooOld = ds < minStr;
+    const isLogged = missedLoggedDays.includes(ds);
+    const isSelected = missedSelectedDays.includes(ds);
+    const isToday = ds === todayStr;
 
     let cls = 'cal-day';
     if (isFuture || isTooOld) cls += ' disabled';
     else if (isLogged) cls += ' already-logged';
-    else if (isRent && isSelected) cls += ' rent-selected';
-    else if (!isRent && isSelected) cls += ' selected';
+    else if (isSelected) cls += ' selected';
     else if (isToday) cls += ' today-marker';
 
     const clickable = !isFuture && !isTooOld && !isLogged;
-    const onclick = clickable ? `onclick="${isRent?'toggleRentDay':'toggleDay'}('${dateStr}')"` : '';
-    const label = isLogged ? '✓' : d;
-    html += `<div class="${cls}" ${onclick}>${label}</div>`;
+    const onclick = clickable ? `onclick="toggleMissedDay('${ds}')"` : '';
+    html += `<div class="${cls}" ${onclick}>${isLogged ? '✓' : d}</div>`;
   }
-
   html += '</div>';
   wrap.innerHTML = html;
+
+  const selEl = document.getElementById('missedCalSelected');
+  selEl.textContent = missedSelectedDays.length
+    ? `${missedSelectedDays.length} día(s) seleccionado(s): ${missedSelectedDays.map(d=>d.slice(5)).join(', ')}`
+    : 'Ningún día seleccionado';
 }
 
-function toggleDay(dateStr) {
-  const idx = selectedDays.indexOf(dateStr);
-  if (idx > -1) selectedDays.splice(idx, 1);
-  else selectedDays.push(dateStr);
-  selectedDays.sort();
-  updateCalDisplay();
+function toggleMissedDay(ds) {
+  const idx = missedSelectedDays.indexOf(ds);
+  if (idx > -1) missedSelectedDays.splice(idx,1);
+  else missedSelectedDays.push(ds);
+  missedSelectedDays.sort();
+  renderMissedCal();
 }
 
-function toggleRentDay(dateStr) {
-  const idx = selectedRentDays.indexOf(dateStr);
-  if (idx > -1) selectedRentDays.splice(idx, 1);
-  else selectedRentDays.push(dateStr);
-  selectedRentDays.sort();
-  updateCalDisplay();
+function missedCalPrev() { missedCalView.setMonth(missedCalView.getMonth()-1); renderMissedCal(); }
+function missedCalNext() {
+  const next = new Date(missedCalView); next.setMonth(next.getMonth()+1);
+  if (next <= new Date()) { missedCalView.setMonth(missedCalView.getMonth()+1); renderMissedCal(); }
 }
 
-function calPrev() { calViewDate.setMonth(calViewDate.getMonth()-1); updateCalDisplay(); }
-function calNext() {
-  const next = new Date(calViewDate); next.setMonth(next.getMonth()+1);
-  if (next <= new Date()) { calViewDate.setMonth(calViewDate.getMonth()+1); updateCalDisplay(); }
-}
-function rentCalPrev() { rentCalViewDate.setMonth(rentCalViewDate.getMonth()-1); updateCalDisplay(); }
-function rentCalNext() {
-  const next = new Date(rentCalViewDate); next.setMonth(next.getMonth()+1);
-  if (next <= new Date()) { rentCalViewDate.setMonth(rentCalViewDate.getMonth()+1); updateCalDisplay(); }
+function cancelMissed() {
+  missedWorker = null; missedSelectedDays = [];
+  document.getElementById('missedCalSection').style.display = 'none';
+  document.getElementById('missedJobInput').value = '';
+  document.querySelectorAll('.worker-sel-btn').forEach(b=>b.classList.remove('active'));
 }
 
-function updateCalDisplay() {
-  buildCalendar('calendarWrap', calViewDate, selectedDays, false, loggedDaysThisMonth);
-  buildCalendar('rentCalendarWrap', rentCalViewDate, selectedRentDays, true, []);
+async function saveMissedCheckins() {
+  if (!missedWorker) { showToast('Selecciona un trabajador', true); return; }
+  if (!missedSelectedDays.length) { showToast('Selecciona al menos un día', true); return; }
+  const job = document.getElementById('missedJobInput').value.trim();
+  if (!job) { showToast('Ingresa el Job/Proyecto', true); return; }
 
-  // Update selected days label
-  const selEl = document.getElementById('calSelected');
-  if (selectedDays.length === 0) {
-    selEl.textContent = 'Ningún día seleccionado';
-  } else {
-    selEl.textContent = `${selectedDays.length} día(s): ${selectedDays.map(d=>d.slice(8)).join(', ')}`;
-  }
+  const btn = document.querySelector('#missedCalSection .btn-primary');
+  btn.disabled = true; btn.textContent = 'Guardando...';
 
-  // Update earnings estimate
-  const estEl = document.getElementById('earningsEstimate');
-  if (selectedDays.length > 0 || selectedRentDays.length > 0) {
-    estEl.style.display = 'block';
-    const workedDays = selectedDays.length;
-    const rentDays = selectedRentDays.length;
-    const earnings = workedDays * RATE;
-    const rentCost = rentDays * RATE;
-    const net = earnings - rentCost;
-    document.getElementById('estDays').textContent = workedDays;
-    document.getElementById('estRentDays').textContent = rentDays;
-    document.getElementById('estEarnings').textContent = money(earnings);
-    document.getElementById('estRent').textContent = money(rentCost);
-    document.getElementById('estNet').textContent = money(net);
-    document.getElementById('estNet').className = 'est-val big ' + (net >= 0 ? 'green' : 'red');
-  } else {
-    estEl.style.display = 'none';
-  }
-}
-
-async function initCalendar() {
-  selectedDays = [today()]; // default to today
-  selectedRentDays = [];
-  calViewDate = new Date();
-  rentCalViewDate = new Date();
-  // Load already-logged days for this worker/machine
   try {
-    const existing = await sbFetch(`records?worker=eq.${encodeURIComponent(selWorker)}&machine=eq.${selMachine}&date=gte.${ym(new Date())}-01`);
-    loggedDaysThisMonth = existing.map(r=>r.date);
-  } catch(e) { loggedDaysThisMonth = []; }
-  updateCalDisplay();
+    const w = WORKERS.find(x=>x.name===missedWorker);
+    for (let i=0; i<missedSelectedDays.length; i++) {
+      await insertRecord({ id:Date.now()+i, worker:missedWorker, machine:w.machine, job, date:missedSelectedDays[i], earned:RATE, sig:'', ts:new Date().toISOString() });
+    }
+    showToast(`✓ ${missedSelectedDays.length} día(s) registrado(s) para ${missedWorker.split(' ')[0]}`);
+    cancelMissed();
+    renderDashboard();
+  } catch(e) {
+    showToast('Error al guardar', true);
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ REGISTRAR DÍAS OLVIDADOS';
+  }
 }
+
+
 
 
 function renderEarningsPills() {
